@@ -3,6 +3,7 @@ Turbine - Message Queue
 
 Turbine is a Kafka like message queue that is based on Redis.
 
+The default consumer model of turbine works without replication. This is due to the way that inside Turbine a consumer is just a pointer.
 
                    ┏ Current last element of pipeline
     ┏━┳━┳━┳━┳━┳━┳━┳┻┳━┳━┓
@@ -10,3 +11,5 @@ Turbine is a Kafka like message queue that is based on Redis.
     ┗┳┻━┻━┻━┻┳┻━┻━┻━┻━┻━┛
      ┃       ┗ Pointer for consumer 1
      ┗ Pointer for consumer 2
+
+This way Turbine can achieve a high throughput while also allowing a at least once behavior for a clustered consumer.
