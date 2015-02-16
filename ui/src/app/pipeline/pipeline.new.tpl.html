@@ -1,0 +1,17 @@
+<h2>New Pipeline</h2>
+<form>
+  <div class="form-group">
+    <label for="name">Pipeline Name</label>
+    <input type="text" id="name" class="form-control" placeholder="Enter Name" ng-model="name">
+  </div>
+  <div class="form-group">
+    <label for="description">Pipeline Description</label>
+    <textarea id="description" class="form-control" rows="3" placeholder="Enter Description" ng-model="description"></textarea>
+  </div>
+  <div class="checkbox">
+    <label>
+      <input type="checkbox" ng-model="active"> Activate
+    </label>
+  </div>
+  <button type="submit" class="btn btn-default" ng-click="createPipeline()">Create</button>
+</form>

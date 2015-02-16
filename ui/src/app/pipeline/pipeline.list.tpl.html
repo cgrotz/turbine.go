@@ -1,0 +1,38 @@
+<h2>Pipelines</h2>
+
+<form class="form-inline">
+<a class="btn btn-default" ui-sref="pipeline.new()">New</a>
+  &nbsp;
+  <div class="form-group pull-right">
+    <label for="exampleInputName2">Sort By:&nbsp;</label>
+    <select class="form-control">
+      <option value="alphabetical">Alphabetically</option>
+    </select>
+  </div>
+</form>
+
+<div class="row" ng-repeat="pipeline in pipelines">
+   <div class="col-md-12">
+    <h2><a ui-sref="pipeline.detail({pipelineId:pipeline.id})">{{pipeline.name}}</a> <small>{{pipeline.description}}</small></h2>
+  </div>
+  <div class="col-md-9">
+     <nvd3-multi-bar-chart
+       data="pipeline.statistic.values"
+       id="pipelinechart-{{pipeline.id}}"
+       width="900"
+       height="150"
+       showXAxis="true"
+       showYAxis="false"
+       color="colorFunction()">
+         <svg ></svg>
+     </nvd3-multi-bar-chart>
+   </div>
+   <div class="col-md-3">
+     <div class="widget widget-number valuation">
+       <h3 class="value" style="text-align:center;">{{pipeline.statistic.today}}</h3>
+       <p class="change-rate" style="text-align:center;">
+         <i class="fa" ng:class="{true:'fa-arrow-up', false:'fa-arrow-down'}[pipeline.change_rate > 0]"></i><span>{{pipeline.statistic.change_rate}}%</span>
+       </p>
+     </div>
+   </div>
+</div>

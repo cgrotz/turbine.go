@@ -1,0 +1,32 @@
+<h1>{{pipeline.name}}&nbsp;<small>&nbsp;{{pipeline.description}}</small></h1>
+<div class="row">
+  <div class="col-md-9">
+    <h2 class="title" >Intake Timeline</h2>
+    <nvd3-multi-bar-chart
+      data="pipeline.statistic.values"
+      id="pipelinechart-{{pipeline.id}}"
+      width="900"
+      height="150"
+      showXAxis="true"
+      showYAxis="false"
+      color="colorFunction()">
+        <svg ></svg>
+    </nvd3-multi-bar-chart>
+  </div>
+  <div class="col-md-3">
+    <div class="widget widget-number valuation">
+      <h2 class="title" style="text-align:center;">Todays Intake</h2>
+      <h3 class="value" style="text-align:center;">{{pipeline.statistic.today}}</h3>
+      <p class="change-rate" style="text-align:center;">
+        <i class="fa" ng:class="{true:'fa-arrow-up', false:'fa-arrow-down'}[pipeline.statistic.change_rate > 0]"></i><span>{{pipeline.statistic.change_rate}}%</span>
+      </p>
+    </div>
+  </div>
+  <div class="col-md-9">
+    <h2 class="title" >Consumers</h2>
+    <div ng-repeat="consumer in pipeline.consumers">
+      <h3>{{consumer.id}}</h3>
+      <strong>{{consumer.unread_elements}}</strong>
+    </div>
+  </div>
+</div>
