@@ -12,7 +12,7 @@ type Backend interface {
 	RetrievePipelineStatistic(id string) (*PipelineStatistic, error)
 
 	PopDatapoint(id string, consumerId string) ([]string, error)
-	PushDatapoint(pipelineId string, value string) (bool, error)
+	PushDatapoint(pipelineId string, value string) (int64, error)
 }
 
 type Pipeline struct {

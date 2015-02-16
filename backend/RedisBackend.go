@@ -117,13 +117,15 @@ func (b *RedisBackend) GetPipeline(id string) (*Pipeline, error) {
 	}
 	readPipeline.PipelineStatistic = *pipelineStatistic
 
+	currentElementPointer, _ := client.IncrBy("pipeline:"+id+":datapoints", 0)
+
 	var consumers []Consumer
 	consumerKeys, err := client.SMembers("pipeline:" + id + ":consumers")
 	for _, consumerKey := range consumerKeys {
 		var consumer Consumer
 		consumer.Id = consumerKey[(strings.LastIndex(consumerKey, ":") + 1):]
-		len, _ := client.LLen(consumerKey)
-		consumer.UnreadElements = len
+		len, _ := client.IncrBy(consumerKey, 0)
+		consumer.UnreadElements = currentElementPointer - len
 
 		consumers = append(consumers, consumer)
 	}
@@ -255,7 +257,14 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 		var datapoints []string
 
 		for i := int64(0); i < 10 && i < readableElements; i++ {
-			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d:*", pipelineId, consumerPointer+i)
+			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, consumerPointer+i)
+			value, _ := jedis.Get(elementKey)
+			log.Printf("Read element v %d values %s", elementKey, value)
+			stringvalue := string(value)
+			if stringvalue != "" {
+				datapoints = append(datapoints, stringvalue)
+			}
+			/*elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d:*", pipelineId, consumerPointer+i)
 			log.Printf("Read keys for element %s", elementKey)
 			keys, _ := jedis.Keys(elementKey)
 			log.Printf("Read keys for element %d values %s", consumerPointer+i, keys)
@@ -266,7 +275,7 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 				if stringvalue != "" {
 					datapoints = append(datapoints, stringvalue)
 				}
-			}
+			}*/
 		}
 		if readableElements < 10 {
 			jedis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+readableElements), 0, 0, false, false)
@@ -332,17 +341,17 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 /*
  *
  */
-func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (bool, error) {
+func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (int64, error) {
 	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
-		return false, err
+		return -1, err
 	}
 
 	pipelineExists, err := client.Exists("pipelines:" + pipelineId)
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
-		return false, err
+		return -1, err
 	}
 	if !pipelineExists {
 		var newPipeline Pipeline
@@ -355,10 +364,10 @@ func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (bool, err
 	pointer, err := client.Incr("pipeline:" + pipelineId + ":datapoints")
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
-		return false, err
+		return -1, err
 	}
 
-	elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d:%d", pipelineId, pointer, time.Now().Unix())
+	elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, pointer)
 	elementValue := fmt.Sprintf("%s", value)
 	client.Set(elementKey, elementValue, 0, 0, false, false)
 	log.Printf("Added element at %s with value %s", elementKey, elementValue)
@@ -374,5 +383,5 @@ func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (bool, err
 
 	// TODO add redis pubsub distribution of message?
 
-	return true, nil
+	return pointer, nil
 }

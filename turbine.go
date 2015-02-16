@@ -65,11 +65,15 @@ func (s *Server) listPipelines(w http.ResponseWriter, r *http.Request) {
 	pipelines, err := s.Backend.GetPipelines()
 	if err != nil {
 		log.Fatal("Error retrieving pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	str, err := json.Marshal(pipelines)
 	if err != nil {
 		log.Fatal("Error marshalling pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	w.Write(str)
@@ -82,11 +86,15 @@ func (s *Server) createPipeline(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&pipeline)
 	if err != nil {
 		log.Fatal("ERROR decoding JSON - ", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	_, err = s.Backend.CreatePipeline(pipeline)
 	if err != nil {
 		log.Fatal("Error saving pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
@@ -99,11 +107,15 @@ func (s *Server) getPipeline(w http.ResponseWriter, r *http.Request) {
 	pipeline, err := s.Backend.GetPipeline(id)
 	if err != nil {
 		log.Fatal("Error retrieving pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	str, err := json.Marshal(pipeline)
 	if err != nil {
 		log.Fatal("Error marshalling pipeline response:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	w.Write(str)
@@ -118,11 +130,15 @@ func (s *Server) updatePipeline(w http.ResponseWriter, r *http.Request) {
 	decodingErr := decoder.Decode(&pipeline)
 	if decodingErr != nil {
 		log.Fatal("ERROR decoding JSON - ", decodingErr.Error())
+		http.Error(w, decodingErr.Error(), 500)
+		return
 	}
 
 	_, err := s.Backend.UpdatePipeline(id, pipeline)
 	if err != nil {
 		log.Fatal("Error retrieving pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
@@ -135,6 +151,8 @@ func (s *Server) deletePipeline(w http.ResponseWriter, r *http.Request) {
 	_, err := s.Backend.DeletePipeline(id)
 	if err != nil {
 		log.Fatal("Error deleting pipeline:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
@@ -147,11 +165,15 @@ func (s *Server) getPipelineStatistics(w http.ResponseWriter, r *http.Request) {
 	pipelineStatistic, err := s.Backend.RetrievePipelineStatistic(id)
 	if err != nil {
 		log.Fatal("Error retrieving pipeline statistic:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	str, err := json.Marshal(pipelineStatistic)
 	if err != nil {
 		log.Fatal("Error marshalling response:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
 	w.Write(str)
@@ -168,11 +190,15 @@ func (s *Server) popDatapoint(w http.ResponseWriter, r *http.Request) {
 		datapoints, err := s.Backend.PopDatapoint(pipelineId, consumerId[0])
 		if err != nil {
 			log.Fatal("Error retrieving pipeline:", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
 		}
 
 		str, err := json.Marshal(datapoints)
 		if err != nil {
 			log.Fatal("Error retrieving pipeline:", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
 		}
 
 		w.Write(str)
@@ -187,12 +213,18 @@ func (s *Server) pushDatapoint(w http.ResponseWriter, r *http.Request) {
 	bodyStr, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Fatal("Error opening connection to redis:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
 
-	_, err = s.Backend.PushDatapoint(id, string(bodyStr))
+	datapointIndex, err := s.Backend.PushDatapoint(id, string(bodyStr))
 	if err != nil {
 		log.Fatal("Error pushing datapoint:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
 	}
+
+	w.Header().Add("Location", fmt.Sprintf("http://localhost:3000/api/v1/%s/datapoints/%d", id, datapointIndex))
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
