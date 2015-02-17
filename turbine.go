@@ -59,12 +59,13 @@ type Server struct {
 }
 
 func run(address string, binding string) {
-	println(`___________          ___.   .__
-\__    ___/_ ________\_ |__ |__| ____   ____
-  |    | |  |  \_  __ \ __ \|  |/    \_/ __ \
-  |    | |  |  /|  | \/ \_\ \  |   |  \  ___/
-  |____| |____/ |__|  |___  /__|___|  /\___  >
-                          \/        \/     \/`)
+	println("___________          ___.   .__")
+	println("\\__    ___/_ ________\\_ |__ |__| ____   ____")
+	println("  |    | |  |  \\_  __ \\ __ \\|  |/    \\_/ __ \\")
+	println("  |    | |  |  /|  | \\/ \\_\\ \\  |   |  \\  ___/")
+	println("  |____| |____/ |__|  |___  /__|___|  /\\___  >")
+	println("                          \\/        \\/     \\/")
+
 	println()
 	log.Println("printing configuration")
 	log.Printf("redis: %s", address)
@@ -95,24 +96,6 @@ func run(address string, binding string) {
 	http.Handle("/", http.FileServer(http.Dir("ui/build")))
 
 	http.ListenAndServe(binding, nil)
-
-	go turbine()
-}
-
-/**
-* This is only required once we support the fanout into QoSed consumers
- */
-func turbine() {
-	/*
-		  TODO
-		  for {
-
-				jedis, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
-				if err != nil {
-					log.Fatal("Error opening connection to redis:", err.Error())
-				}
-
-			}*/
 }
 
 func (s *Server) listPipelines(w http.ResponseWriter, r *http.Request) {
@@ -290,8 +273,6 @@ func (s *Server) pushDatapoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Location", fmt.Sprintf("http://localhost:3000/api/v1/%s/datapoints/%d", id, datapointIndex))
-
-	log.Println("Finished HTTP request at ", r.URL.Path)
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request) {

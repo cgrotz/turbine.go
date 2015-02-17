@@ -15,8 +15,6 @@ type RedisBackend struct {
 }
 
 func (b RedisBackend) openConnection() (*goredis.Redis, error) {
-	//"tcp://127.0.0.1:6379"
-	log.Printf("opening connection on %s", b.RedisUrl)
 	return goredis.DialURL(b.RedisUrl + "/0?timeout=10s&maxidle=1")
 }
 
@@ -271,18 +269,6 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 			if stringvalue != "" {
 				datapoints = append(datapoints, stringvalue)
 			}
-			/*elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d:*", pipelineId, consumerPointer+i)
-			log.Printf("Read keys for element %s", elementKey)
-			keys, _ := redis.Keys(elementKey)
-			log.Printf("Read keys for element %d values %s", consumerPointer+i, keys)
-			if len(keys) > 0 {
-				value, _ := redis.Get(keys[0])
-				log.Printf("Read element v %d values %s", keys[0], value)
-				stringvalue := string(value)
-				if stringvalue != "" {
-					datapoints = append(datapoints, stringvalue)
-				}
-			}*/
 		}
 		if readableElements < 10 {
 			redis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+readableElements), 0, 0, false, false)
@@ -295,53 +281,6 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 		return datapoints, nil
 	}
 
-	// The below code works against consumers that consum basically a fanout into redis lists
-	// Should be converted in a QoS based approach
-	/*
-		consumersSetKey := "pipeline:" + pipelineId + ":consumers"
-		consumerKey := "pipeline:" + pipelineId + ":consumers:" + consumerId
-
-		redis.SAdd(consumersSetKey, consumerKey)
-		consumerListExists, err := redis.Exists(consumerKey)
-		if err != nil {
-			log.Panic("Error checking key on existence:", err.Error())
-			return nil, err
-		}
-
-		if consumerListExists {
-			tx, err := redis.Transaction()
-			if err != nil {
-				log.Panic("Error opening transaction on redis:", err.Error())
-				return nil, err
-			}
-			for i := 0; i < 10; i++ {
-				err := tx.Command("LPOP", consumerKey)
-				if err != nil {
-					log.Panic("Error adding command to transaction:", err.Error())
-					return nil, err
-				}
-			}
-			reply, err := tx.Exec()
-			if err != nil {
-				log.Panic("Error executing transaction:", err.Error())
-				return nil, err
-			}
-
-			var datapoints []string
-
-			for _, element := range reply {
-				stringvalue, err := element.StringValue()
-				if err != nil {
-					log.Panic("Error reading result from transaction:", err.Error())
-					return nil, err
-				}
-				if len(stringvalue) > 0 {
-					datapoints = append(datapoints, stringvalue)
-				}
-			}
-			return datapoints, nil
-		}
-	*/
 	return nil, nil
 }
 
@@ -360,6 +299,7 @@ func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, err
 		log.Panic("Error opening connection to redis:", err.Error())
 		return -1, err
 	}
+
 	if !pipelineExists {
 		var newPipeline Pipeline
 		newPipeline.Id = pipelineId
@@ -374,21 +314,20 @@ func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, err
 		return -1, err
 	}
 
+	pipeline, _ := redis.Pipelining()
 	elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, pointer)
 	elementValue := fmt.Sprintf("%s", value)
-	redis.Set(elementKey, elementValue, 0, 0, false, false)
-	log.Printf("Added element at %s with value %s", elementKey, elementValue)
+	err = pipeline.Command("SET", elementKey, elementValue)
+	if err != nil {
+		log.Panic("Error pipelining command", err.Error())
+		return -1, err
+	}
 
-	redis.Incr("pipeline:" + pipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
-
-	// At the moment here the distribution to the consumers happens here
-	// Maybe this should be kept for consumers with a specific QoS requirement?
-	/*consumers, err := redis.SMembers("pipeline:" + pipelineId + ":consumers")
-	for _, consumerKey := range consumers {
-		redis.LPush(consumerKey, fmt.Sprintf("%s", value))
-	}*/
-
-	// TODO add redis pubsub distribution of message?
+	err = pipeline.Command("INCT", "pipeline:"+pipelineId+":statistics:"+fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
+	if err != nil {
+		log.Panic("Error pipelining command:", err.Error())
+		return -1, err
+	}
 
 	return pointer, nil
 }

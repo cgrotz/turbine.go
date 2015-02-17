@@ -14,6 +14,13 @@ The default consumer model of turbine works without replication. This is due to 
 
 This way Turbine can achieve a high throughput while also allowing a at least once behavior for a clustered consumer.
 
+Run with
+
+    docker run -d --name redis redis
+    docker run --rm -p 3000:3000 --link redis:redis cgrotz/turbine
+
+The UI and API will than be accessible via port 3000 http://localhost:3000
+
 # REST Interface #
 
 ## Pipelines [/api/v1/pipelines]
