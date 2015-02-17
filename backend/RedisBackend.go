@@ -11,16 +11,23 @@ import (
 )
 
 type RedisBackend struct {
+	RedisUrl string
 }
 
-func (b *RedisBackend) GetPipelines() ([]Pipeline, error) {
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) openConnection() (*goredis.Redis, error) {
+	//"tcp://127.0.0.1:6379"
+	log.Printf("opening connection on %s", b.RedisUrl)
+	return goredis.DialURL(b.RedisUrl + "/0?timeout=10s&maxidle=1")
+}
+
+func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
-	pipelineKeys, err := client.Keys("pipelines:*")
+	pipelineKeys, err := redis.Keys("pipelines:*")
 	if err != nil {
 		log.Panic("Error retrieving pipeline keys:", err.Error())
 		return nil, err
@@ -30,7 +37,7 @@ func (b *RedisBackend) GetPipelines() ([]Pipeline, error) {
 	var pipelines []Pipeline
 
 	for _, pipelineKey := range pipelineKeys {
-		val, err := client.Get(pipelineKey)
+		val, err := redis.Get(pipelineKey)
 		if err != nil {
 			log.Panic("Error retrieving pipeline:", err.Error())
 			return nil, err
@@ -59,7 +66,7 @@ func (b *RedisBackend) GetPipelines() ([]Pipeline, error) {
 	return pipelines, nil
 }
 
-func (b *RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
+func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 	if pipeline.Id != "" {
 		log.Println("storing pipeline ", (*pipeline).Id, *pipeline)
 	} else {
@@ -69,7 +76,7 @@ func (b *RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 		pipeline.Id = id
 	}
 
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
@@ -84,20 +91,20 @@ func (b *RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 	marshalledPipeline := string(pipelineStr[:])
 	log.Println("Storing pipeline ", marshalledPipeline)
 
-	client.Set("pipelines:"+pipeline.Id, marshalledPipeline, 0, 0, false, false)
+	redis.Set("pipelines:"+pipeline.Id, marshalledPipeline, 0, 0, false, false)
 	log.Println("Stored pipeline ", string(pipelineStr[:]))
 
 	return pipeline, nil
 }
 
-func (b *RedisBackend) GetPipeline(id string) (*Pipeline, error) {
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) GetPipeline(id string) (*Pipeline, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
-	readPipelineStr, err := client.Get("pipelines:" + id)
+	readPipelineStr, err := redis.Get("pipelines:" + id)
 	if err != nil {
 		log.Panic("Error retrieving pipeline from redis:", err.Error())
 		return nil, err
@@ -117,14 +124,14 @@ func (b *RedisBackend) GetPipeline(id string) (*Pipeline, error) {
 	}
 	readPipeline.PipelineStatistic = *pipelineStatistic
 
-	currentElementPointer, _ := client.IncrBy("pipeline:"+id+":datapoints", 0)
+	currentElementPointer, _ := redis.IncrBy("pipeline:"+id+":datapoints", 0)
 
 	var consumers []Consumer
-	consumerKeys, err := client.SMembers("pipeline:" + id + ":consumers")
+	consumerKeys, err := redis.SMembers("pipeline:" + id + ":consumers")
 	for _, consumerKey := range consumerKeys {
 		var consumer Consumer
 		consumer.Id = consumerKey[(strings.LastIndex(consumerKey, ":") + 1):]
-		len, _ := client.IncrBy(consumerKey, 0)
+		len, _ := redis.IncrBy(consumerKey, 0)
 		consumer.UnreadElements = currentElementPointer - len
 
 		consumers = append(consumers, consumer)
@@ -134,8 +141,8 @@ func (b *RedisBackend) GetPipeline(id string) (*Pipeline, error) {
 	return readPipeline, nil
 }
 
-func (b *RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic, error) {
-	jedis, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
@@ -144,14 +151,14 @@ func (b *RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic,
 	currentTime := time.Now()
 
 	todayFormatted := fmt.Sprintf("%d-%02d-%02d", currentTime.Year(), currentTime.Month(), currentTime.Day())
-	today, err := jedis.IncrBy("pipeline:"+id+":statistics:"+todayFormatted, 0)
+	today, err := redis.IncrBy("pipeline:"+id+":statistics:"+todayFormatted, 0)
 	if err != nil {
 		log.Panic("Error retrieving todays statistic information:", err.Error())
 		return nil, err
 	}
 
 	yesterdayFormatted := fmt.Sprintf("%d-%02d-%02d", currentTime.AddDate(0, 0, -1).Year(), currentTime.AddDate(0, 0, -1).Month(), currentTime.AddDate(0, 0, -1).Day())
-	yesterday, err := jedis.IncrBy("pipeline:"+id+":statistics:"+yesterdayFormatted, 0)
+	yesterday, err := redis.IncrBy("pipeline:"+id+":statistics:"+yesterdayFormatted, 0)
 	if err != nil {
 		log.Panic("Error retrieving yesterdays statistic information:", err.Error())
 		return nil, err
@@ -171,7 +178,7 @@ func (b *RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic,
 		elementDate := currentTime.AddDate(0, 0, -1*i)
 		dateString := fmt.Sprintf("%d-%02d-%02d", elementDate.Year(), elementDate.Month(), elementDate.Day())
 		pipelineStatisticElement.Date = dateString
-		pipelineStatisticElement.Intake, err = jedis.IncrBy("pipeline:"+id+":statistics:"+dateString, 0)
+		pipelineStatisticElement.Intake, err = redis.IncrBy("pipeline:"+id+":statistics:"+dateString, 0)
 		if err != nil {
 			log.Fatal("Error retrieving statistics information:", err.Error())
 		}
@@ -181,14 +188,14 @@ func (b *RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic,
 	return pipelineStatistic, nil
 }
 
-func (b *RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline, error) {
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
-	readPipelineStr, err := client.Get("pipelines:" + id)
+	readPipelineStr, err := redis.Get("pipelines:" + id)
 	if err != nil {
 		log.Panic("Error reading pipeline:", err.Error())
 		return nil, err
@@ -210,19 +217,19 @@ func (b *RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline,
 		return nil, marshallingErr
 	}
 	marshalledPipeline := string(pipelineStr[:])
-	client.Set("pipelines:"+id, marshalledPipeline, 0, 0, false, false)
+	redis.Set("pipelines:"+id, marshalledPipeline, 0, 0, false, false)
 
 	return readPipeline, nil
 }
 
-func (b *RedisBackend) DeletePipeline(id string) (bool, error) {
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) DeletePipeline(id string) (bool, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return false, err
 	}
 
-	_, err = client.Del("pipelines:" + id)
+	_, err = redis.Del("pipelines:" + id)
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return false, err
@@ -230,22 +237,22 @@ func (b *RedisBackend) DeletePipeline(id string) (bool, error) {
 	return true, nil
 }
 
-func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]string, error) {
-	jedis, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]string, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("error opening connection to redis:", err.Error())
 		return nil, err
 	}
 	consumerKey := "pipeline:" + pipelineId + ":consumers:" + consumerId
 	// Add consumer to set of consumers for pipeline
-	jedis.SAdd("pipeline:"+pipelineId+":consumers", consumerKey)
+	redis.SAdd("pipeline:"+pipelineId+":consumers", consumerKey)
 
 	// current pointer
-	currentElementPointer, _ := jedis.IncrBy("pipeline:"+pipelineId+":datapoints", 0)
+	currentElementPointer, _ := redis.IncrBy("pipeline:"+pipelineId+":datapoints", 0)
 	// first readable element; the plan would be for a cleanup job to run, increasing this pointer ever forward
-	firstElementPointer, _ := jedis.IncrBy("pipeline:"+pipelineId+":firstdatapoint", 0)
+	firstElementPointer, _ := redis.IncrBy("pipeline:"+pipelineId+":firstdatapoint", 0)
 	// pointer for the consumer
-	consumerPointer, _ := jedis.IncrBy(consumerKey, 0)
+	consumerPointer, _ := redis.IncrBy(consumerKey, 0)
 	if consumerPointer == 0 {
 		consumerPointer = firstElementPointer
 	}
@@ -258,7 +265,7 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 
 		for i := int64(0); i < 10 && i < readableElements; i++ {
 			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, consumerPointer+i)
-			value, _ := jedis.Get(elementKey)
+			value, _ := redis.Get(elementKey)
 			log.Printf("Read element v %d values %s", elementKey, value)
 			stringvalue := string(value)
 			if stringvalue != "" {
@@ -266,10 +273,10 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 			}
 			/*elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d:*", pipelineId, consumerPointer+i)
 			log.Printf("Read keys for element %s", elementKey)
-			keys, _ := jedis.Keys(elementKey)
+			keys, _ := redis.Keys(elementKey)
 			log.Printf("Read keys for element %d values %s", consumerPointer+i, keys)
 			if len(keys) > 0 {
-				value, _ := jedis.Get(keys[0])
+				value, _ := redis.Get(keys[0])
 				log.Printf("Read element v %d values %s", keys[0], value)
 				stringvalue := string(value)
 				if stringvalue != "" {
@@ -278,10 +285,10 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 			}*/
 		}
 		if readableElements < 10 {
-			jedis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+readableElements), 0, 0, false, false)
+			redis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+readableElements), 0, 0, false, false)
 			log.Printf("Set consumer pointer to %d", consumerPointer+readableElements)
 		} else {
-			jedis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+10), 0, 0, false, false)
+			redis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+10), 0, 0, false, false)
 			log.Printf("Set consumer pointer to %d", consumerPointer+10)
 		}
 		log.Printf("Returning datapoints: %s", datapoints)
@@ -294,15 +301,15 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 		consumersSetKey := "pipeline:" + pipelineId + ":consumers"
 		consumerKey := "pipeline:" + pipelineId + ":consumers:" + consumerId
 
-		jedis.SAdd(consumersSetKey, consumerKey)
-		consumerListExists, err := jedis.Exists(consumerKey)
+		redis.SAdd(consumersSetKey, consumerKey)
+		consumerListExists, err := redis.Exists(consumerKey)
 		if err != nil {
 			log.Panic("Error checking key on existence:", err.Error())
 			return nil, err
 		}
 
 		if consumerListExists {
-			tx, err := jedis.Transaction()
+			tx, err := redis.Transaction()
 			if err != nil {
 				log.Panic("Error opening transaction on redis:", err.Error())
 				return nil, err
@@ -341,14 +348,14 @@ func (b *RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]str
 /*
  *
  */
-func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (int64, error) {
-	client, err := goredis.Dial(&goredis.DialConfig{Address: "127.0.0.1:6379"})
+func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, error) {
+	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return -1, err
 	}
 
-	pipelineExists, err := client.Exists("pipelines:" + pipelineId)
+	pipelineExists, err := redis.Exists("pipelines:" + pipelineId)
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return -1, err
@@ -361,7 +368,7 @@ func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (int64, er
 		b.CreatePipeline(&newPipeline)
 	}
 
-	pointer, err := client.Incr("pipeline:" + pipelineId + ":datapoints")
+	pointer, err := redis.Incr("pipeline:" + pipelineId + ":datapoints")
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return -1, err
@@ -369,16 +376,16 @@ func (b *RedisBackend) PushDatapoint(pipelineId string, value string) (int64, er
 
 	elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, pointer)
 	elementValue := fmt.Sprintf("%s", value)
-	client.Set(elementKey, elementValue, 0, 0, false, false)
+	redis.Set(elementKey, elementValue, 0, 0, false, false)
 	log.Printf("Added element at %s with value %s", elementKey, elementValue)
 
-	client.Incr("pipeline:" + pipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
+	redis.Incr("pipeline:" + pipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
 
 	// At the moment here the distribution to the consumers happens here
 	// Maybe this should be kept for consumers with a specific QoS requirement?
-	/*consumers, err := client.SMembers("pipeline:" + pipelineId + ":consumers")
+	/*consumers, err := redis.SMembers("pipeline:" + pipelineId + ":consumers")
 	for _, consumerKey := range consumers {
-		client.LPush(consumerKey, fmt.Sprintf("%s", value))
+		redis.LPush(consumerKey, fmt.Sprintf("%s", value))
 	}*/
 
 	// TODO add redis pubsub distribution of message?

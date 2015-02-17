@@ -4,10 +4,12 @@ import (
 	"cgrotz/turbined/backend"
 	"encoding/json"
 	"fmt"
+	"github.com/codegangsta/cli"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
 type Server struct {
@@ -15,8 +17,60 @@ type Server struct {
 }
 
 func main() {
+	//mqtt.Run()
+	app := cli.NewApp()
+	app.Name = "turbined"
+	app.Usage = "message queue for the cloud"
+	app.Commands = []cli.Command{
+		{
+			Name:      "run",
+			ShortName: "r",
+			Usage:     "run the Turbine server",
+			Action: func(c *cli.Context) {
+				run(c.GlobalString("redisUrl"), c.GlobalString("bind"))
+			},
+		},
+		{
+			Name:      "status",
+			ShortName: "s",
+			Usage:     "show cluster status",
+			Action: func(c *cli.Context) {
+				println("status")
+			},
+		},
+	}
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "bind",
+			Value:  ":3000",
+			Usage:  "http bind for communication, e.g. ':3000'",
+			EnvVar: "TURBINE_HTTP_BIND",
+		},
+		cli.StringFlag{
+			Name:   "redisUrl",
+			Value:  "tcp://127.0.0.1:6379",
+			Usage:  "addresses of redis, e.g. tcp://127.0.0.1:6379",
+			EnvVar: "REDIS_PORT_6379_TCP",
+		},
+	}
+
+	app.Run(os.Args)
+}
+func run(address string, binding string) {
+	println(`___________          ___.   .__
+\__    ___/_ ________\_ |__ |__| ____   ____
+  |    | |  |  \_  __ \ __ \|  |/    \_/ __ \
+  |    | |  |  /|  | \/ \_\ \  |   |  \  ___/
+  |____| |____/ |__|  |___  /__|___|  /\___  >
+                          \/        \/     \/`)
+	println()
+	log.Println("printing configuration")
+	log.Printf("redis: %s", address)
+	log.Printf("http bind to: %s", binding)
 	server := &Server{}
-	server.Backend = new(backend.RedisBackend)
+	redisBackend := backend.RedisBackend{RedisUrl: address}
+	server.Backend = backend.Backend(redisBackend)
 
 	r := mux.NewRouter()
 	r.Path("/api/v1/pipelines").Methods("GET").HandlerFunc(server.listPipelines)
@@ -39,7 +93,7 @@ func main() {
 
 	http.Handle("/", http.FileServer(http.Dir("ui/build")))
 
-	http.ListenAndServe(":3000", nil)
+	http.ListenAndServe(binding, nil)
 
 	go turbine()
 }
