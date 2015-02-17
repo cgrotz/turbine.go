@@ -1,7 +1,7 @@
 Turbine - Message Queue
 =======================
 
-Turbine is a Kafka like message queue that is based on Redis.
+Turbine is a Kafka like message queue that is based on Redis. The purpose was to remove the hassle of running a Apache Zookeeper Cluster and allowing an easier setup in cloud environments like Cloudfoundry.
 
 The default consumer model of turbine works without replication. This is due to the way that inside Turbine a consumer is just a pointer.
 
@@ -13,9 +13,6 @@ The default consumer model of turbine works without replication. This is due to 
      ┗ Pointer for consumer 2
 
 This way Turbine can achieve a high throughput while also allowing a at least once behavior for a clustered consumer.
-
-#TODO#
-* Add UDP support for datapoint storage
 
 # REST Interface #
 
@@ -198,7 +195,7 @@ Updates the name or description of a pipeline, identified by its *id*.
 
 ### Delete Pipeline [DELETE]
 Delete a pipeline. **Warning:** This action **permanently** removes the pipeline from the system.
-
+/
 + Response 204
 
 ## Datapoints [/api/v1/pipelines/{id}/datapoints]
