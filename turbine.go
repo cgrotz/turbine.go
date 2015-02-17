@@ -144,12 +144,21 @@ func (s *Server) createPipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = s.Backend.CreatePipeline(pipeline)
+	pipeline, err = s.Backend.CreatePipeline(pipeline)
 	if err != nil {
 		log.Fatal("Error saving pipeline:", err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	str, err := json.Marshal(pipeline)
+	if err != nil {
+		log.Fatal("Error marshalling pipeline response:", err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Write(str)
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
@@ -173,6 +182,7 @@ func (s *Server) getPipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(str)
+	log.Println("Finished HTTP request at ", r.URL.Path)
 }
 
 func (s *Server) updatePipeline(w http.ResponseWriter, r *http.Request) {
