@@ -12,10 +12,6 @@ import (
 	"os"
 )
 
-type Server struct {
-	Backend backend.Backend
-}
-
 func main() {
 	//mqtt.Run()
 	app := cli.NewApp()
@@ -57,6 +53,11 @@ func main() {
 
 	app.Run(os.Args)
 }
+
+type Server struct {
+	Backend backend.Backend
+}
+
 func run(address string, binding string) {
 	println(`___________          ___.   .__
 \__    ___/_ ________\_ |__ |__| ____   ____

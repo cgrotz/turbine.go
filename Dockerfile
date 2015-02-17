@@ -1,9 +1,10 @@
-FROM busybox
+FROM scratch
+
 MAINTAINER Christoph Grotz <christoph.grotz@gmail.com>
 
-ADD ui/build ./ui
-ADD turbined .
+ADD ./ui/build /ui/build
+ADD turbined turbined
 
 EXPOSE  3000
 
-CMD ["turbined", "run"]
+CMD ["/turbined", "run"]
