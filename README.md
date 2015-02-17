@@ -13,3 +13,11 @@ The default consumer model of turbine works without replication. This is due to 
      ┗ Pointer for consumer 2
 
 This way Turbine can achieve a high throughput while also allowing a at least once behavior for a clustered consumer.
+
+#TODO#
+* Add UDP support for datapoint storage
+
+# Interface #
+
+##REST##
+TODO list of Rest Calls
