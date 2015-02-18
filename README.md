@@ -22,6 +22,8 @@ Run with
 The UI and API will than be accessible via port 3000 http://localhost:3000
 
 # REST Interface #
+The REST interfaces support xml (`text/xml`) and json (`application/json`) you can switch by setting the `Accept` or `Content-Type` header accordingly.
+
 
 ## Pipelines [/api/v1/pipelines]
 This resource represents all pipelines.
