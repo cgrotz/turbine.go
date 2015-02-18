@@ -46,7 +46,7 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:   "writers",
-			Value:  10,
+			Value:  100,
 			Usage:  "amount of parallel running turbine noozles",
 			EnvVar: "TURBINE_WRITERS",
 		},
@@ -82,9 +82,11 @@ func run(writers int, address string, binding string) {
 	redisBackend := backend.RedisBackend{RedisUrl: address, Datapoints: make(chan *backend.Datapoint)}
 	server.Backend = backend.Backend(redisBackend)
 
+	hash, _ := redisBackend.StartScripting()
+
 	// Initialize writers
 	for i := 1; i < writers+1; i++ {
-		go redisBackend.Start(redisBackend.Datapoints)
+		go redisBackend.Start(hash, redisBackend.Datapoints)
 	}
 
 	// Rest Interface

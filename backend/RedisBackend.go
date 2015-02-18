@@ -276,6 +276,7 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, error) {
 	b.Datapoints <- &Datapoint{pipelineId, value}
 	return 0, nil
+
 	/*	redis, err := b.openConnection()
 		if err != nil {
 			log.Panic("Error opening connection to redis:", err.Error())
@@ -310,7 +311,27 @@ func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, err
 		return pointer, nil*/
 }
 
-func (b RedisBackend) Start(datapoints chan *Datapoint) {
+func (b RedisBackend) StartScripting() (string, error) {
+	redis, err := b.openConnection()
+	if err != nil {
+		log.Panic("Error opening connection to redis:", err.Error())
+		return "", err
+	}
+	redis.ScriptFlush()
+	hash, err := redis.ScriptLoad(`
+			local link_id = redis.call("INCR", KEYS[1])
+			redis.call("SET", KEYS[1] .. ":" .. link_id, ARGV[1])
+			redis.call("INCR", KEYS[2])
+			return link_id`)
+	if err != nil {
+		log.Panic("Error opening connection to redis:", err.Error())
+		return "", err
+	}
+
+	return hash, nil
+}
+
+func (b RedisBackend) Start(scriptHash string, datapoints chan *Datapoint) {
 	redis, err := b.openConnection()
 	if err != nil {
 		log.Panic("Error opening connection to redis:", err.Error())
@@ -318,34 +339,26 @@ func (b RedisBackend) Start(datapoints chan *Datapoint) {
 
 	for {
 		datapoint := <-datapoints
-		/*
-			go func() {
-				redis2, err := b.openConnection()
-				if err != nil {
-					log.Panic("Error opening connection to redis:", err.Error())
-				}
-				pipelineExists, err := redis2.Exists("pipelines:" + datapoint.PipelineId)
-				if err != nil {
-					log.Panic("Error opening connection to redis:", err.Error())
-				}
-				if !pipelineExists {
-					var newPipeline Pipeline
-					newPipeline.Id = datapoint.PipelineId
-					newPipeline.Name = datapoint.PipelineId
-					newPipeline.Description = "Dynamically generated pipeline"
-					b.CreatePipeline(&newPipeline)
-				}
-			}()*/
 
-		pointer, err := redis.Incr("pipeline:" + datapoint.PipelineId + ":datapoints")
+		reply, err := redis.EvalSha(scriptHash, []string{"pipeline:" + datapoint.PipelineId + ":datapoints", fmt.Sprintf("pipeline:%s:statistics:%d-%02d-%02d", datapoint.PipelineId, time.Now().Year(), time.Now().Month(), time.Now().Day())}, []string{datapoint.Value})
 		if err != nil {
-			log.Panic("Error opening connection to redis:", err.Error())
+			log.Panic("Error executing script:", err.Error())
 		}
 
-		elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", datapoint.PipelineId, pointer)
-		elementValue := fmt.Sprintf("%s", datapoint.Value)
-		redis.Set(elementKey, elementValue, 0, 0, false, false)
+		_, err = reply.IntegerValue()
+		if err != nil {
+			log.Panic("Error reading index:", err.Error())
+		}
+		/*
+			pointer, err := redis.Incr("pipeline:" + datapoint.PipelineId + ":datapoints")
+			if err != nil {
+				log.Panic("Error opening connection to redis:", err.Error())
+			}
 
-		redis.Incr("pipeline:" + datapoint.PipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
+			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", datapoint.PipelineId, pointer)
+			elementValue := fmt.Sprintf("%s", datapoint.Value)
+			redis.Set(elementKey, elementValue, 0, 0, false, false)
+
+			redis.Incr("pipeline:" + datapoint.PipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))*/
 	}
 }
