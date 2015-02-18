@@ -3,6 +3,7 @@ package main
 import (
 	"cgrotz/turbined/backend"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/gorilla/mux"
@@ -72,38 +73,41 @@ func run(writers int, address string, binding string) {
 	println("  |____| |____/ |__|  |___  /__|___|  /\\___  >")
 	println("                          \\/        \\/     \\/")
 
-	println()
 	log.Println("printing configuration")
 	log.Printf("redis: %s", address)
 	log.Printf("http bind to: %s", binding)
 	log.Printf("writers: %d", writers)
+
 	server := &Server{}
 	redisBackend := backend.RedisBackend{RedisUrl: address, Datapoints: make(chan *backend.Datapoint)}
 	server.Backend = backend.Backend(redisBackend)
+
+	// Initialize writers
 	for i := 1; i < writers+1; i++ {
 		go redisBackend.Start(redisBackend.Datapoints)
-		log.Printf("Started writer %d", i)
 	}
 
+	// Rest Interface
 	r := mux.NewRouter()
+	// Pipelines
 	r.Path("/api/v1/pipelines").Methods("GET").HandlerFunc(server.listPipelines)
 	r.Path("/api/v1/pipelines").Methods("POST").HandlerFunc(server.createPipeline)
 
+	// Pipeline
 	r.Path("/api/v1/pipelines/{id}").Methods("GET").HandlerFunc(server.getPipeline)
 	r.Path("/api/v1/pipelines/{id}").Methods("PUT").HandlerFunc(server.updatePipeline)
 	r.Path("/api/v1/pipelines/{id}").Methods("DELETE").HandlerFunc(server.deletePipeline)
 
+	// Pipeline statistics
 	r.Path("/api/v1/pipelines/{id}/statistics").Methods("GET").HandlerFunc(server.getPipelineStatistics)
 
+	// Datapoint Endpoints
 	// TODO not sure how to solve that yet...
 	r.Path("/api/v1/pipelines/{id}/datapoints").Headers("Accept", "text/event-stream").Methods("GET").HandlerFunc(server.stream)
-
 	r.Path("/api/v1/pipelines/{id}/datapoints").Methods("GET").HandlerFunc(server.popDatapoint)
-
 	r.Path("/api/v1/pipelines/{id}/datapoints").Methods("POST").HandlerFunc(server.pushDatapoint)
 
 	http.Handle("/api/v1/", r)
-
 	http.Handle("/", http.FileServer(http.Dir("ui/build")))
 
 	http.ListenAndServe(binding, nil)
@@ -118,42 +122,22 @@ func (s *Server) listPipelines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	str, err := json.Marshal(pipelines)
-	if err != nil {
-		log.Fatal("Error marshalling pipeline:", err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	w.Write(str)
+	marshalResponse(w, r, pipelines)
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
 
 func (s *Server) createPipeline(w http.ResponseWriter, r *http.Request) {
 	pipeline := &backend.Pipeline{}
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&pipeline)
-	if err != nil {
-		log.Fatal("ERROR decoding JSON - ", err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	decodeBody(w, r, pipeline)
 
-	pipeline, err = s.Backend.CreatePipeline(pipeline)
+	pipeline, err := s.Backend.CreatePipeline(pipeline)
 	if err != nil {
 		log.Fatal("Error saving pipeline:", err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	str, err := json.Marshal(pipeline)
-	if err != nil {
-		log.Fatal("Error marshalling pipeline response:", err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	w.Write(str)
+	marshalResponse(w, r, pipeline)
 
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
@@ -169,14 +153,7 @@ func (s *Server) getPipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	str, err := json.Marshal(pipeline)
-	if err != nil {
-		log.Fatal("Error marshalling pipeline response:", err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	w.Write(str)
+	marshalResponse(w, r, pipeline)
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
 
@@ -185,13 +162,7 @@ func (s *Server) updatePipeline(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	pipeline := &backend.Pipeline{}
-	decoder := json.NewDecoder(r.Body)
-	decodingErr := decoder.Decode(&pipeline)
-	if decodingErr != nil {
-		log.Fatal("ERROR decoding JSON - ", decodingErr.Error())
-		http.Error(w, decodingErr.Error(), 500)
-		return
-	}
+	decodeBody(w, r, pipeline)
 
 	_, err := s.Backend.UpdatePipeline(id, pipeline)
 	if err != nil {
@@ -228,14 +199,7 @@ func (s *Server) getPipelineStatistics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	str, err := json.Marshal(pipelineStatistic)
-	if err != nil {
-		log.Fatal("Error marshalling response:", err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	w.Write(str)
+	marshalResponse(w, r, pipelineStatistic)
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
 
@@ -253,14 +217,7 @@ func (s *Server) popDatapoint(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		str, err := json.Marshal(datapoints)
-		if err != nil {
-			log.Fatal("Error retrieving pipeline:", err.Error())
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		w.Write(str)
+		marshalResponse(w, r, datapoints)
 	}
 	log.Println("Finished HTTP request at ", r.URL.Path)
 }
@@ -299,7 +256,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		}
 
 		messageChan := make(chan string)
-		// TODO register messageChan against pipeline, maybe redis pub/sub?
+		// TODO register message/Chan against pipeline, maybe redis pub/sub?
 
 		// Listen to the closing of the http connection via the CloseNotifier
 		notify := w.(http.CloseNotifier).CloseNotify()
@@ -327,4 +284,47 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	log.Println("Finished HTTP request at ", r.URL.Path)
+}
+
+func marshalResponse(w http.ResponseWriter, r *http.Request, obj interface{}) {
+	if len(r.Header["Accept"]) > 0 && r.Header["Accept"][0] == "text/xml" {
+		str, err := xml.Marshal(obj)
+		if err != nil {
+			log.Fatal("Error marshalling pipeline:", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		w.Write(str)
+	} else {
+		str, err := json.Marshal(obj)
+		if err != nil {
+			log.Fatal("Error marshalling pipeline:", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(str)
+	}
+}
+
+func decodeBody(w http.ResponseWriter, r *http.Request, obj interface{}) {
+	if len(r.Header["Content-Type"]) > 0 && r.Header["Content-Type"][0] == "text/xml" {
+		decoder := xml.NewDecoder(r.Body)
+		err := decoder.Decode(obj)
+		if err != nil {
+			log.Fatal("ERROR decoding XML - ", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+	} else {
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(obj)
+		if err != nil {
+			log.Fatal("ERROR decoding JSON - ", err.Error())
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
 }

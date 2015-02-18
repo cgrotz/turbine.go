@@ -31,7 +31,6 @@ func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
 		log.Panic("Error retrieving pipeline keys:", err.Error())
 		return nil, err
 	}
-	log.Println("Retrieved pipeline keys:", pipelineKeys)
 
 	var pipelines []Pipeline
 
@@ -41,7 +40,6 @@ func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
 			log.Panic("Error retrieving pipeline:", err.Error())
 			return nil, err
 		}
-		log.Println("Retrieved pipeline:", val)
 
 		var pipeline Pipeline
 		decodingErr := json.Unmarshal(val, &pipeline)
@@ -60,18 +58,13 @@ func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
 
 		pipelines = append(pipelines, pipeline)
 	}
-	log.Println("Returning pipeline:", pipelines)
 
 	return pipelines, nil
 }
 
 func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
-	if pipeline.Id != "" {
-		log.Println("storing pipeline ", (*pipeline).Id, *pipeline)
-	} else {
+	if pipeline.Id == "" {
 		id := fmt.Sprintf("%s", uuid.NewV4())
-		log.Println("storing pipeline ", *pipeline)
-
 		pipeline.Id = id
 	}
 
@@ -80,7 +73,6 @@ func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 		log.Panic("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
-	log.Println("Inserting pipeline ", pipeline)
 
 	pipelineStr, marshallingErr := json.Marshal(pipeline)
 	if marshallingErr != nil {
@@ -88,10 +80,8 @@ func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 		return nil, marshallingErr
 	}
 	marshalledPipeline := string(pipelineStr[:])
-	log.Println("Storing pipeline ", marshalledPipeline)
 
 	redis.Set("pipelines:"+pipeline.Id, marshalledPipeline, 0, 0, false, false)
-	log.Println("Stored pipeline ", string(pipelineStr[:]))
 
 	return pipeline, nil
 }
@@ -257,7 +247,6 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 	}
 
 	readableElements := currentElementPointer - consumerPointer
-	log.Printf("Readable elements:%d for pipeline:%s consumerId:%s", readableElements, pipelineId, consumerId)
 
 	if readableElements > 0 {
 		var datapoints []string
@@ -265,7 +254,6 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 		for i := int64(0); i < 10 && i < readableElements; i++ {
 			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, consumerPointer+i)
 			value, _ := redis.Get(elementKey)
-			log.Printf("Read element v %d values %s", elementKey, value)
 			stringvalue := string(value)
 			if stringvalue != "" {
 				datapoints = append(datapoints, stringvalue)
@@ -273,12 +261,9 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 		}
 		if readableElements < 10 {
 			redis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+readableElements), 0, 0, false, false)
-			log.Printf("Set consumer pointer to %d", consumerPointer+readableElements)
 		} else {
 			redis.Set(consumerKey, fmt.Sprintf("%d", consumerPointer+10), 0, 0, false, false)
-			log.Printf("Set consumer pointer to %d", consumerPointer+10)
 		}
-		log.Printf("Returning datapoints: %s", datapoints)
 		return datapoints, nil
 	}
 
