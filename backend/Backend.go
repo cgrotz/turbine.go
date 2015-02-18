@@ -38,3 +38,8 @@ type PipelineStatistic struct {
 	ChangeRate float64                    `json:"change_rate"`
 	Statistics []PipelineStatisticElement `json:"statistics"`
 }
+
+type Datapoint struct {
+	PipelineId string `json:"id"`
+	Value      string `json:"payload"`
+}

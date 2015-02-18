@@ -23,7 +23,7 @@ func main() {
 			ShortName: "r",
 			Usage:     "run the Turbine server",
 			Action: func(c *cli.Context) {
-				run(c.GlobalString("redisUrl"), c.GlobalString("bind"))
+				run(c.GlobalInt("writers"), c.GlobalString("redisUrl"), c.GlobalString("bind"))
 			},
 		},
 		{
@@ -43,6 +43,12 @@ func main() {
 			Usage:  "http bind for communication, e.g. ':3000'",
 			EnvVar: "TURBINE_HTTP_BIND",
 		},
+		cli.IntFlag{
+			Name:   "writers",
+			Value:  10,
+			Usage:  "amount of parallel running turbine noozles",
+			EnvVar: "TURBINE_WRITERS",
+		},
 		cli.StringFlag{
 			Name:   "redisUrl",
 			Value:  "tcp://127.0.0.1:6379",
@@ -58,7 +64,7 @@ type Server struct {
 	Backend backend.Backend
 }
 
-func run(address string, binding string) {
+func run(writers int, address string, binding string) {
 	println("___________          ___.   .__")
 	println("\\__    ___/_ ________\\_ |__ |__| ____   ____")
 	println("  |    | |  |  \\_  __ \\ __ \\|  |/    \\_/ __ \\")
@@ -70,9 +76,14 @@ func run(address string, binding string) {
 	log.Println("printing configuration")
 	log.Printf("redis: %s", address)
 	log.Printf("http bind to: %s", binding)
+	log.Printf("writers: %d", writers)
 	server := &Server{}
-	redisBackend := backend.RedisBackend{RedisUrl: address}
+	redisBackend := backend.RedisBackend{RedisUrl: address, Datapoints: make(chan *backend.Datapoint)}
 	server.Backend = backend.Backend(redisBackend)
+	for i := 1; i < writers+1; i++ {
+		go redisBackend.Start(redisBackend.Datapoints)
+		log.Printf("Started writer %d", i)
+	}
 
 	r := mux.NewRouter()
 	r.Path("/api/v1/pipelines").Methods("GET").HandlerFunc(server.listPipelines)
