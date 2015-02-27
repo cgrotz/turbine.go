@@ -3,6 +3,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rcrowley/go-metrics"
 	"github.com/satori/go.uuid"
 	"github.com/xuyu/goredis"
 	"log"
@@ -22,13 +23,13 @@ func (b RedisBackend) openConnection() (*goredis.Redis, error) {
 func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
 	pipelineKeys, err := redis.Keys("pipelines:*")
 	if err != nil {
-		log.Panic("Error retrieving pipeline keys:", err.Error())
+		log.Fatal("Error retrieving pipeline keys:", err.Error())
 		return nil, err
 	}
 
@@ -37,21 +38,21 @@ func (b RedisBackend) GetPipelines() ([]Pipeline, error) {
 	for _, pipelineKey := range pipelineKeys {
 		val, err := redis.Get(pipelineKey)
 		if err != nil {
-			log.Panic("Error retrieving pipeline:", err.Error())
+			log.Fatal("Error retrieving pipeline:", err.Error())
 			return nil, err
 		}
 
 		var pipeline Pipeline
 		decodingErr := json.Unmarshal(val, &pipeline)
 		if decodingErr != nil {
-			log.Panic("Error decoding pipeline \"%s\"", string(val), decodingErr.Error())
+			log.Fatal("Error decoding pipeline \"%s\"", string(val), decodingErr.Error())
 			return nil, err
 		}
 
 		// maybe better via expand
 		pipelineStatistic, err := b.RetrievePipelineStatistic(pipeline.Id)
 		if decodingErr != nil {
-			log.Panic("Error retrieving pipeline statistic:", decodingErr.Error())
+			log.Fatal("Error retrieving pipeline statistic:", decodingErr.Error())
 			return nil, decodingErr
 		}
 		pipeline.PipelineStatistic = *pipelineStatistic
@@ -70,13 +71,13 @@ func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
 	pipelineStr, marshallingErr := json.Marshal(pipeline)
 	if marshallingErr != nil {
-		log.Panic("Error retrieving pipelines:", marshallingErr.Error())
+		log.Fatal("Error retrieving pipelines:", marshallingErr.Error())
 		return nil, marshallingErr
 	}
 	marshalledPipeline := string(pipelineStr[:])
@@ -89,26 +90,26 @@ func (b RedisBackend) CreatePipeline(pipeline *Pipeline) (*Pipeline, error) {
 func (b RedisBackend) GetPipeline(id string) (*Pipeline, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
 	readPipelineStr, err := redis.Get("pipelines:" + id)
 	if err != nil {
-		log.Panic("Error retrieving pipeline from redis:", err.Error())
+		log.Fatal("Error retrieving pipeline from redis:", err.Error())
 		return nil, err
 	}
 
 	readPipeline := &Pipeline{}
 	decodingErr := json.Unmarshal(readPipelineStr, &readPipeline)
 	if decodingErr != nil {
-		log.Panic("Error decoding pipeline:", decodingErr.Error())
+		log.Fatal("Error decoding pipeline:", decodingErr.Error())
 		return nil, decodingErr
 	}
 	// maybe better via expand
 	pipelineStatistic, err := b.RetrievePipelineStatistic(id)
 	if decodingErr != nil {
-		log.Panic("Error retrieving pipeline statistic:", decodingErr.Error())
+		log.Fatal("Error retrieving pipeline statistic:", decodingErr.Error())
 		return nil, decodingErr
 	}
 	readPipeline.PipelineStatistic = *pipelineStatistic
@@ -133,7 +134,7 @@ func (b RedisBackend) GetPipeline(id string) (*Pipeline, error) {
 func (b RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
@@ -142,14 +143,14 @@ func (b RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic, 
 	todayFormatted := fmt.Sprintf("%d-%02d-%02d", currentTime.Year(), currentTime.Month(), currentTime.Day())
 	today, err := redis.IncrBy("pipeline:"+id+":statistics:"+todayFormatted, 0)
 	if err != nil {
-		log.Panic("Error retrieving todays statistic information:", err.Error())
+		log.Fatal("Error retrieving todays statistic information:", err.Error())
 		return nil, err
 	}
 
 	yesterdayFormatted := fmt.Sprintf("%d-%02d-%02d", currentTime.AddDate(0, 0, -1).Year(), currentTime.AddDate(0, 0, -1).Month(), currentTime.AddDate(0, 0, -1).Day())
 	yesterday, err := redis.IncrBy("pipeline:"+id+":statistics:"+yesterdayFormatted, 0)
 	if err != nil {
-		log.Panic("Error retrieving yesterdays statistic information:", err.Error())
+		log.Fatal("Error retrieving yesterdays statistic information:", err.Error())
 		return nil, err
 	}
 
@@ -180,20 +181,20 @@ func (b RedisBackend) RetrievePipelineStatistic(id string) (*PipelineStatistic, 
 func (b RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return nil, err
 	}
 
 	readPipelineStr, err := redis.Get("pipelines:" + id)
 	if err != nil {
-		log.Panic("Error reading pipeline:", err.Error())
+		log.Fatal("Error reading pipeline:", err.Error())
 		return nil, err
 	}
 
 	readPipeline := &Pipeline{}
 	decodingErr2 := json.Unmarshal(readPipelineStr, &readPipeline)
 	if decodingErr2 != nil {
-		log.Panic("Error retrieving pipeline:", decodingErr2.Error())
+		log.Fatal("Error retrieving pipeline:", decodingErr2.Error())
 		return nil, decodingErr2
 	}
 
@@ -202,7 +203,7 @@ func (b RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline, 
 
 	pipelineStr, marshallingErr := json.Marshal(readPipeline)
 	if marshallingErr != nil {
-		log.Panic("Error marshalling stored pipeline:", marshallingErr.Error())
+		log.Fatal("Error marshalling stored pipeline:", marshallingErr.Error())
 		return nil, marshallingErr
 	}
 	marshalledPipeline := string(pipelineStr[:])
@@ -214,13 +215,13 @@ func (b RedisBackend) UpdatePipeline(id string, pipeline *Pipeline) (*Pipeline, 
 func (b RedisBackend) DeletePipeline(id string) (bool, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return false, err
 	}
 
 	_, err = redis.Del("pipelines:" + id)
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Failed deleting pipeline entry:", err.Error())
 		return false, err
 	}
 	return true, nil
@@ -229,7 +230,7 @@ func (b RedisBackend) DeletePipeline(id string) (bool, error) {
 func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]string, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("error opening connection to redis:", err.Error())
+		log.Fatal("error opening connection to redis:", err.Error())
 		return nil, err
 	}
 	consumerKey := "pipeline:" + pipelineId + ":consumers:" + consumerId
@@ -276,89 +277,54 @@ func (b RedisBackend) PopDatapoint(pipelineId string, consumerId string) ([]stri
 func (b RedisBackend) PushDatapoint(pipelineId string, value string) (int64, error) {
 	b.Datapoints <- &Datapoint{pipelineId, value}
 	return 0, nil
-
-	/*	redis, err := b.openConnection()
-		if err != nil {
-			log.Panic("Error opening connection to redis:", err.Error())
-			return -1, err
-		}
-
-		pipelineExists, err := redis.Exists("pipelines:" + pipelineId)
-		if err != nil {
-			log.Panic("Error opening connection to redis:", err.Error())
-			return -1, err
-		}
-		if !pipelineExists {
-			var newPipeline Pipeline
-			newPipeline.Id = pipelineId
-			newPipeline.Name = pipelineId
-			newPipeline.Description = "Dynamically generated pipeline"
-			b.CreatePipeline(&newPipeline)
-		}
-
-		pointer, err := redis.Incr("pipeline:" + pipelineId + ":datapoints")
-		if err != nil {
-			log.Panic("Error opening connection to redis:", err.Error())
-			return -1, err
-		}
-
-		elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", pipelineId, pointer)
-		elementValue := fmt.Sprintf("%s", value)
-		redis.Set(elementKey, elementValue, 0, 0, false, false)
-
-		redis.Incr("pipeline:" + pipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))
-
-		return pointer, nil*/
 }
 
 func (b RedisBackend) StartScripting() (string, error) {
 	redis, err := b.openConnection()
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("Error opening connection to redis:", err.Error())
 		return "", err
 	}
-	redis.ScriptFlush()
+	err = redis.ScriptFlush()
+	if err != nil {
+		log.Fatal("StartScripting, Failed flushing redis scripts:", err.Error())
+		return "", err
+	}
+
 	hash, err := redis.ScriptLoad(`
 			local link_id = redis.call("INCR", KEYS[1])
 			redis.call("SET", KEYS[1] .. ":" .. link_id, ARGV[1])
 			redis.call("INCR", KEYS[2])
 			return link_id`)
 	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
+		log.Fatal("StartScripting, Failed loading script into redis:", err.Error())
 		return "", err
 	}
 
 	return hash, nil
 }
 
-func (b RedisBackend) Start(scriptHash string, datapoints chan *Datapoint) {
-	redis, err := b.openConnection()
-	if err != nil {
-		log.Panic("Error opening connection to redis:", err.Error())
-	}
-
+func (b RedisBackend) Start(t metrics.Timer, scriptHash string, datapoints chan *Datapoint) {
 	for {
-		datapoint := <-datapoints
-
-		reply, err := redis.EvalSha(scriptHash, []string{"pipeline:" + datapoint.PipelineId + ":datapoints", fmt.Sprintf("pipeline:%s:statistics:%d-%02d-%02d", datapoint.PipelineId, time.Now().Year(), time.Now().Month(), time.Now().Day())}, []string{datapoint.Value})
+		redis, err := b.openConnection()
 		if err != nil {
-			log.Panic("Error executing script:", err.Error())
+			log.Fatal("Error opening connection to redis:", err.Error())
 		}
 
-		_, err = reply.IntegerValue()
-		if err != nil {
-			log.Panic("Error reading index:", err.Error())
+		for {
+			datapoint := <-datapoints
+
+			t.Time(func() {
+				reply, err := redis.EvalSha(scriptHash, []string{"pipeline:" + datapoint.PipelineId + ":datapoints", fmt.Sprintf("pipeline:%s:statistics:%d-%02d-%02d", datapoint.PipelineId, time.Now().Year(), time.Now().Month(), time.Now().Day())}, []string{datapoint.Value})
+				if err != nil {
+					log.Fatal("Error executing script:", err.Error())
+				}
+
+				_, err = reply.IntegerValue()
+				if err != nil {
+					log.Fatal("Error reading index:", err.Error())
+				}
+			})
 		}
-		/*
-			pointer, err := redis.Incr("pipeline:" + datapoint.PipelineId + ":datapoints")
-			if err != nil {
-				log.Panic("Error opening connection to redis:", err.Error())
-			}
-
-			elementKey := fmt.Sprintf("pipeline:%s:datapoints:%d", datapoint.PipelineId, pointer)
-			elementValue := fmt.Sprintf("%s", datapoint.Value)
-			redis.Set(elementKey, elementValue, 0, 0, false, false)
-
-			redis.Incr("pipeline:" + datapoint.PipelineId + ":statistics:" + fmt.Sprintf("%d-%02d-%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()))*/
 	}
 }

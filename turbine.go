@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"github.com/codegangsta/cli"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/codegangsta/cli"
+	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -78,15 +79,22 @@ func run(writers int, address string, binding string) {
 	log.Printf("http bind to: %s", binding)
 	log.Printf("writers: %d", writers)
 
+	go metrics.Log(metrics.DefaultRegistry, 10e9, log.New(os.Stdout, "metrics: ", log.Lmicroseconds))
+
 	server := &Server{}
 	redisBackend := backend.RedisBackend{RedisUrl: address, Datapoints: make(chan *backend.Datapoint)}
 	server.Backend = backend.Backend(redisBackend)
 
-	hash, _ := redisBackend.StartScripting()
+	hash, err := redisBackend.StartScripting()
+	if err != nil {
+		log.Fatal("Unable to load scripts to redis")
+	}
 
+	t := metrics.NewTimer()
+	metrics.Register("messageloop", t)
 	// Initialize writers
 	for i := 1; i < writers+1; i++ {
-		go redisBackend.Start(hash, redisBackend.Datapoints)
+		go redisBackend.Start(t, hash, redisBackend.Datapoints)
 	}
 
 	// Rest Interface
