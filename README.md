@@ -1,5 +1,6 @@
 Turbine - Message Queue
 =======================
+[![Build Status](https://travis-ci.org/cgrotz/turbine.go.svg?branch=master)](https://travis-ci.org/cgrotz/turbine.go)
 
 Turbine is a Kafka like message queue that is based on Redis. The purpose was to remove the hassle of running a Apache Zookeeper Cluster and allowing an easier setup in cloud environments like Cloudfoundry.
 
