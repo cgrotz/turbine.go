@@ -1,10 +1,10 @@
 package main
 
 import (
-	"./backend"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/cgrotz/turbine.go/backend"
 	"github.com/rcrowley/go-metrics"
 	"io/ioutil"
 	"log"
