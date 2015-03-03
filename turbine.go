@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cgrotz/turbined/backend"
+	"./backend"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
