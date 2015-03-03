@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/rcrowley/go-metrics"
 	"io/ioutil"
 	"log"
 	"net/http"
